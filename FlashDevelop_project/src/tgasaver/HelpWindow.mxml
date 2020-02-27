@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" width="600" height="500" creationComplete="Init()" title="Help" showCloseButton="true" close="closeWindow()">
+	
+	<mx:XML id="ruHelpXML" source="assets/Help_RU.xml"/>
+	<mx:XML id="enHelpXML" source="assets/Help_EN.xml"/>
+	
+	<mx:Script>
+		<![CDATA[ 
+			import mx.events.CloseEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			
+			public function Init():void
+			{
+				LanguageSelector_changeHandler(null);
+				
+				PopUpManager.centerPopUp(this);
+			}
+			
+			public function closeWindow():void
+			{
+				PopUpManager.removePopUp(this);
+			}
+			
+			protected function Ok_clickHandler(event:MouseEvent):void
+			{
+				//var e:CloseEvent = new CloseEvent("CLOSE");
+				//var e:Event = new Event("CloseEvent.CLOSE");
+				//this.dispatchEvent(Event(e));
+				//dispatchEvent(Event(e));
+				//closeWindow();
+			}
+			
+			protected function LanguageSelector_changeHandler(event:ListEvent):void
+			{
+				//Change help language. 
+				if (LanguageSelector.selectedLabel == "RU")
+				{
+					var text:XMLList = ruHelpXML.*;
+					HelpTextArea.data = text[0];
+				}
+				if (LanguageSelector.selectedLabel == "EN")
+				{
+					//HelpTextArea.data = "nothing";
+					text = enHelpXML.*;
+					HelpTextArea.data = text[0];
+				}
+			}
+			
+		]]>
+		
+	</mx:Script>
+	<mx:Button id="Ok_Btn" y="438" label="Ok"
+			   click="Ok_clickHandler(event)" horizontalCenter="0"/>
+	<mx:Canvas id="panel" left="0" right="0" top="0" height="425" horizontalCenter="0">
+		<mx:TextArea id="HelpTextArea" left="0" right="0" top="0" bottom="0" borderColor="#000000"
+					 editable="false" horizontalCenter="0" verticalCenter="0" wordWrap="false"/>
+	</mx:Canvas>
+	<mx:ComboBox id="LanguageSelector" x="11" y="438" width="50"
+				 change="LanguageSelector_changeHandler(event)">
+		<mx:dataProvider>
+			<mx:Array>
+				<mx:Object label="RU"/>
+				<mx:Object label="EN"/>
+			</mx:Array>
+		</mx:dataProvider>
+	</mx:ComboBox>
+	
+</mx:TitleWindow>

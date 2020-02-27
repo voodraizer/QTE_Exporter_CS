@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml"
+				width="900" height="700" minWidth="600" minHeight="500" layout="absolute" initialize="Init()">
+	
+	<mx:XML id="ruHelpXML" source="assets/Help_RU.xml"/>
+	<mx:XML id="enHelpXML" source="assets/Help_EN.xml"/>
+	
+	<mx:Script>
+		<![CDATA[ 
+			import mx.events.ListEvent;
+			
+			protected function Init():void
+			{
+				//this.visible = false;
+				LanguageSelector_changeHandler(null);
+			}
+			
+			protected function LanguageSelector_changeHandler(event:ListEvent):void
+			{
+				//Change help language. 
+				if (LanguageSelector.selectedLabel == "RU")
+				{
+					var text:XMLList = ruHelpXML.*;
+					HelpTextArea.data = text[0];
+				}
+				if (LanguageSelector.selectedLabel == "EN")
+				{
+					text = enHelpXML.*;
+					HelpTextArea.data = text[0];
+				}
+			}
+			
+			protected function Ok_clickHandler(event:MouseEvent):void
+			{
+				// Close.
+				ExternalInterface.call("CloseHelpWindow");
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:Button id="Ok_Btn" y="664" label="Ok"
+			   click="Ok_clickHandler(event)" horizontalCenter="0"/>
+	<mx:Canvas id="panel" left="0" right="0" top="0" bottom="45" horizontalCenter="0">
+		<mx:TextArea id="HelpTextArea" left="0" right="0" top="0" bottom="0" borderColor="#000000"
+					 editable="false" horizontalCenter="0" verticalCenter="0" wordWrap="false"/>
+	</mx:Canvas>
+	<mx:ComboBox id="LanguageSelector" x="11" y="664" width="50"
+				 change="LanguageSelector_changeHandler(event)">
+		<mx:dataProvider>
+			<mx:Array>
+				<mx:Object label="RU"/>
+				<mx:Object label="EN"/>
+			</mx:Array>
+		</mx:dataProvider>
+	</mx:ComboBox>
+</mx:Application>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" width="180" height="270" creationComplete="centerWindow()" title="TitleWindow" showCloseButton="true" close="closeWindow()">
+	
+	<mx:Script>
+        <![CDATA[
+            import mx.managers.PopUpManager;
+            
+            public function centerWindow():void
+            {
+            	PopUpManager.centerPopUp(this);
+            }
+            
+            public function closeWindow():void
+            {
+            	PopUpManager.removePopUp(this);
+            }
+			
+			protected function ChangeSlotPanel_Cancel_clickHandler(event:MouseEvent):void
+			{
+				closeWindow();
+			}
+			
+		]]>
+       
+	</mx:Script>
+	<mx:Button id="ChangeSlotPanel_Ok" x="29" y="210" label="Ok"/>
+	<mx:Button id="ChangeSlotPanel_Cancel" x="86" y="210" label="Cancel"
+			   click="ChangeSlotPanel_Cancel_clickHandler(event)"/>
+	<mx:Canvas id="panel" y="3" width="100%" height="200" horizontalCenter="0">
+	</mx:Canvas>
+	
+</mx:TitleWindow>

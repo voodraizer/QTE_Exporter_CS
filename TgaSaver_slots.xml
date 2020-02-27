@@ -1,0 +1,14 @@
+<data>
+  <value slot="diffuse" suffix="_df" fill="128;128;128" allowSharpen="true"/>
+  <value slot="normal" suffix="_nm" fill="128;128;255" allowSharpen="false"/>
+  <value slot="specular" suffix="_sp" fill="0;0;0" allowSharpen="true"/>
+  <value slot="specular color" suffix="_spc" fill="0;0;0" allowSharpen="true"/>
+  <value slot="specular level" suffix="_spl" fill="0;0;0" allowSharpen="true"/>
+  <value slot="glossiness" suffix="_gl" fill="0;0;0" allowSharpen="true"/>
+  <value slot="alpha" suffix="_alpha" fill="255;255;255" allowSharpen="true"/>
+  <value slot="emissive" suffix="_em" fill="0;0;0" allowSharpen="true"/>
+  <value slot="bump" suffix="_bump" fill="128;128;128" allowSharpen="true"/>
+  <value slot="mask (RG)" suffix="_mask" fill_r="128;128;128" fill_g="128;128;128" allowSharpen="true"/>
+  <value slot="mask RGBA" suffix="_mask" fill_r="255;0;0" fill_g="0;255;0" fill_b="0;0;255" fill_a="255;255;255" allowSharpen="true"/>
+  <value slot="mask222222222222" suffix="_mask2" fill_r="128;128;128" fill_g="128;128;128" fill_b="128;128;128" fill_a="128;128;128" allowSharpen="true"/>
+</data>

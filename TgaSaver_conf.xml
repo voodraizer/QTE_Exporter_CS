@@ -1,0 +1,33 @@
+<data>
+  <types>
+    <type slot="diffuse" selected="true"/>
+    <type slot="normal" selected="false"/>
+    <type slot="specular" selected="false"/>
+    <type slot="alpha" selected="false"/>
+    <type slot="mask RGBA" selected="false"/>
+  </types>
+  <downscale>
+    <ds slot="diffuse" coeff="1"/>
+    <ds slot="normal" coeff="1"/>
+    <ds slot="specular" coeff="1"/>
+    <ds slot="alpha" coeff="1"/>
+    <ds slot="mask RGBA" coeff="1"/>
+  </downscale>
+  <alpha>
+    <a slot="diffuse" source="specular"/>
+    <a slot="normal" source=""/>
+    <a slot="specular" source=""/>
+    <a slot="alpha" source=""/>
+    <a slot="mask RGBA" source=""/>
+  </alpha>
+  <options>
+    <outputtype value="tga"/>
+    <nonpow2 selected="false"/>
+    <sharpencontrast selected="false"/>
+    <onlyexport selected="false"/>
+    <copytosymmetrypath selected="true"/>
+  </options>
+  <downscalehidden value="false"/>
+  <optionshidden value="false"/>
+  <lastprojectpath path="e:\Unity\Unity Projects\0AZ\Assets\"/>
+</data>

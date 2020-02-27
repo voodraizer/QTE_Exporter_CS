@@ -1,0 +1,943 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml"
+				width="250" height="700" minWidth="955" minHeight="600" layout="absolute" initialize="Init()" creationComplete="InitFinal()" verticalScrollPolicy="off" horizontalScrollPolicy="off">
+	
+	<mx:XML id="testXML" source="assets/conf.xml" format="e4x"></mx:XML>
+	<!-- <mx:Image id="Rgb_14" source="assets/pics/Rgb_14.png"></mx:Image> -->
+	<mx:Image id="RgbPix" alpha="0" hide="true" scaleContent="false"
+			  source="@Embed('../assets/pics/Rgb_10_20.png')"></mx:Image>
+	<mx:Image id="SlotPix" alpha="0" hide="true" scaleContent="false"
+			  source="@Embed('../assets/pics/Slot_10_20.png')"></mx:Image>
+	
+	<mx:click>
+		<![CDATA[
+			//Alert.show("OK", 'Photoshop Scripting',mx.controls.Alert.OK);
+		]]>
+	</mx:click>
+	<mx:keyDown>
+		<![CDATA[
+			//Alert.show("Key down", 'Photoshop Scripting',mx.controls.Alert.OK);
+			// Надо определить что выделена кнопка экспорт, что при этом надажат ввод или контрол+ввод и вызвать экспорт.
+			
+		]]>
+	</mx:keyDown>
+	
+	<mx:Script>
+		<![CDATA[
+			import flash.events.Event;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.FormItem;
+			import mx.containers.HBox;
+			import mx.containers.TitleWindow;
+			import mx.controls.Alert;
+			import mx.controls.Image;
+			import mx.controls.Spacer;
+			import mx.controls.TextInput;
+			import mx.core.IFlexDisplayObject;
+			import mx.core.UIComponent;
+			import mx.events.CloseEvent;
+			import mx.events.ResizeEvent;
+			import mx.managers.PopUpManager;
+			
+			import tgasaver.ChangeSlotsWindow;
+			import tgasaver.EditSlotMode;
+			import tgasaver.HelpWindow;
+			import tgasaver.XmlHelper;
+			//import com.adobe.csxs.core.CSXSInterface;
+			//import com.adobe.photoshop;
+			
+			[Bindable]
+			private var projectsPath:ArrayCollection = new ArrayCollection();
+			
+			private var textureSlots:ArrayCollection = new ArrayCollection();
+			private var downscaleSlots:ArrayCollection = new ArrayCollection();
+			private var alphaSlots:ArrayCollection = new ArrayCollection();
+			private var slotTemplates:Array = new Array();
+			
+			private var editSlotMode:EditSlotMode = EditSlotMode.ADD_SLOT;
+			private var ctrlKeyDown:Boolean = false;
+			
+			// Full height (with open panels).
+			private var origHeight:int = 700;
+			private var optionsHeight:int = 280;
+			private var downScaleHeight:int = 150;
+			private var optionsHidden:Boolean = false;
+			private var downscaleHidden:Boolean = false;
+			
+			// Number of textures for export.
+			private var slotsForExport:int = 0;
+			
+			private function Init():void
+			{	
+				//
+				//trace("Init TgaSaver ui.");
+				this.visible = false;
+				//
+				DisableFocus(this);
+				Export.tabEnabled = true;
+				Export.focusEnabled = true;
+				Export.tabIndex = 0;
+				//Export.focusRect = true;	// Draw focus rect.
+				//Export.selected = true;
+				Export.setFocus();
+				//Export.toolTip = "Click - export and save\nCtrl+Click - only export";
+				AddTextureSlot.toolTip = "Add slot.";
+				DelTextureSlot.toolTip = "Del slot.";
+				OnlyExport.toolTip = "Export, but dont save."
+				// Progress bar.
+				progressBar.mode = "manual";
+				progressBar.minimum = 0;
+				progressBar.maximum = slotsForExport;
+				progressBar.label = "Export: (0 of " + slotsForExport + ")";
+				progressBar.visible = false;
+				progressBar.y = 10;
+				
+				this.visible = true;
+				
+				// Create callbacks for call func from jsx file.
+				ExternalInterface.addCallback("AddSymmetryPath", function(path:String):void{projectsPath.addItem({label:path})});
+				ExternalInterface.addCallback("SavePanelStatus", function():void{SavePanelStatus()});
+				ExternalInterface.addCallback("SaveDefaultConfig", function():void{XmlHelper.SaveDefaultConfig()});
+				ExternalInterface.addCallback("SaveDefaultSlotTemplates", function():void{XmlHelper.SaveDefaultSlotTemplates()});
+				ExternalInterface.addCallback("UpdateProgressBar", function(exportedSlot:String, exportProgress:int):void{UpdateProgressBar(exportedSlot, exportProgress)});
+				
+				// Check config files.
+				ExternalInterface.call("CheckConfigs");
+				
+				// Slot templates.
+				//slotTemplates = new Array();
+				slotTemplates = XmlHelper.GetSlotTemplates();
+				//slotTemplates.push({slot:"diffuse", suffix:"_df", fill:"128;128;128", allowSharpen="true"});
+				//slotTemplates.push({slot:"normal", suffix:"_nm", fill:"128;128;255", allowSharpen="false"});
+				
+				// Load projects and set last used.
+				ExternalInterface.call("LoadProjectsPath");
+				
+				// Load ui data from cfg.
+				LoadConfig();
+				
+				// 
+				application.addEventListener(KeyboardEvent.KEY_DOWN, keyDown);
+				application.addEventListener(KeyboardEvent.KEY_UP, keyUp);
+			}
+			
+			private function InitFinal():void
+			{
+				//Export.setFocus();
+				//Export.validateNow();
+				//var alert:Alert = Alert.show("", '',mx.controls.Alert.OK);
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Export.
+			// ---------------------------------------------------------------------------------------------------------------------
+			protected function Export_clickHandler(event:MouseEvent):void
+			{
+				// Export.
+				//trace("export");
+				
+				Export.visible = false;
+				progressBar.visible = true;
+				
+				// Check for errors.
+				//if (CopyToSymmetryPath.selected && SymmetryPath.selectedIndex == -1)
+				//{
+					//Alert.show("Select path to symmetry export.", 'Photoshop Scripting',mx.controls.Alert.OK);
+					//return;
+				//}
+				
+				var data:Object = GetExportDataFromGUI();
+				
+				for each (var s:Object in data.textureslots)
+				{
+					if (s.selected) slotsForExport++;
+				}
+				UpdateProgressBar("", 0);
+				
+				var result:String = ExternalInterface.call("Export", data, slotTemplates);
+				
+				if (result == "0")
+				{
+					// Close window.
+					Export.visible = true;
+					progressBar.visible = false;
+					ExternalInterface.call("CloseWindow");
+				}
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Disable focus on all components.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function DisableFocus(container:mx.core.Container):void
+			{
+				//Alert.show(UIComponent(container).id + ": " + container.getChildren().length.toString(), '',mx.controls.Alert.OK);
+				for each (var ch:UIComponent in container.getChildren())
+				{
+					ch.focusEnabled = false;
+					ch.tabEnabled = false;
+					//if (ch.className == "Canvas" || ch.className == "VBox" || ch.className == "HBox") DisableFocus(mx.core.Container(ch));
+					if (ch is mx.core.Container) DisableFocus(mx.core.Container(ch));
+				}
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Roll panels.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function CalculatePanelHeight():int
+			{
+				var height:int = origHeight;
+				if (downscaleHidden)
+				{
+					height = height - downScaleHeight;	
+				}
+				if (optionsHidden)
+				{
+					height = height - optionsHeight;
+				}
+				return height;
+			}
+			
+			private function ShowDownScalePanel(hidden:Boolean):void
+			{
+				// Show/hide downscale panel.
+				downscaleHidden = hidden;
+				for each(var child:UIComponent in DownScale.getChildren())
+				{
+					child.visible = !hidden;
+				}
+				
+				if (downscaleHidden)
+				{
+					DownScale.height = 0;
+				}
+				else
+				{
+					DownScale.height = downScaleHeight;
+				}
+				
+				// Resize.
+				var height:int = CalculatePanelHeight();
+				this.height = height;
+				ExternalInterface.call("SetWindowSize", 250, height);
+			}
+			
+			private function ShowOptionsPanel(hidden:Boolean):void
+			{
+				// Show/hide options panel.
+				optionsHidden = hidden;
+				for each(var child:UIComponent in Options.getChildren())
+				{
+					child.visible = !hidden;
+				}
+				
+				if (optionsHidden)
+				{
+					Options.height = 0;
+				}
+				else
+				{
+					Options.height = optionsHeight;
+				}
+				
+				// Resize.
+				var height:int = CalculatePanelHeight();
+				this.height = height;
+				ExternalInterface.call("SetWindowSize", 250, height);
+			}
+			
+			protected function DownScaleRoll_clickHandler(event:MouseEvent):void
+			{
+				// Show/hide downscale panel.
+				downscaleHidden = !downscaleHidden;
+				ShowDownScalePanel(downscaleHidden);
+			}
+			
+			protected function OptionsRoll_clickHandler(event:MouseEvent):void
+			{
+				// Show/hide options panel.
+				optionsHidden = !optionsHidden;
+				ShowOptionsPanel(optionsHidden);
+			}
+			
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Change texture slots window.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function InitChangeSlotWindow(title:String):ChangeSlotsWindow
+			{
+				var window:ChangeSlotsWindow = ChangeSlotsWindow(PopUpManager.createPopUp(this,ChangeSlotsWindow,true));
+				window.title = title;
+				
+				// Create checkboxes for slots.
+				var indexVPos:int = 0;
+				var vPos:int = 0;
+				for each(var st:Object in slotTemplates)
+				{
+					vPos = indexVPos * 25 + 10;
+					
+					var cb:CheckBox = new CheckBox();
+					cb.id = st.slot;
+					cb.label = st.slot;
+					cb.x = 20;
+					cb.y = vPos;
+					cb.width = 120;
+					window.panel.addChild(cb);
+					
+					// Detect multichanel export template.
+					var im:Image = new Image();
+					im.source = SlotPix.source;	// TODO: fake.
+					if (st.fill_r != null || st.fill_g != null || st.fill_b != null || st.fill_a != null)
+					{
+						im.source = RgbPix.source;	// TODO: fake.
+					}
+					im.scaleContent = false;
+					im.x = 140;
+					im.y = vPos;
+					window.panel.addChild(im);
+					
+					indexVPos++;
+				}
+				
+				// Checkbox.
+				for each(var child:UIComponent in window.panel.getChildren())
+				{
+					if (child.className == "CheckBox")
+					{
+						// Init.
+						CheckBox(child).enabled = true;
+						CheckBox(child).alpha = 1;
+						CheckBox(child).selected = false;
+					}
+				}
+				for each(child in window.panel.getChildren())
+				{
+					if (child.className == "CheckBox")
+					{
+						// Make unselectable if slot already exist.
+						for each(var slot:HBox in textureSlots)
+						{
+							if (CheckBox(child).id == slot.id)
+							{
+								CheckBox(child).enabled = false;
+								CheckBox(child).alpha = 0.1;
+							}
+						}
+					}
+				}
+				
+				// Callbacks.
+				window.ChangeSlotPanel_Ok.addEventListener(MouseEvent.CLICK, ChangeSlotWindow_Ok);
+				
+				return window;
+			}
+			
+			protected function AddTextureSlot_clickHandler(event:MouseEvent):void
+			{
+				//
+				editSlotMode = EditSlotMode.ADD_SLOT;
+				InitChangeSlotWindow("Add slot");
+				
+			}
+			
+			protected function DelTextureSlot_clickHandler(event:MouseEvent):void
+			{
+				//
+				editSlotMode = EditSlotMode.DEL_SLOT;
+				var window:ChangeSlotsWindow = InitChangeSlotWindow("Delete slot");
+				
+				// Inverted selection.
+				for each(var child:UIComponent in window.panel.getChildren())
+				{
+					if (child.className == "CheckBox")
+					{
+						if (CheckBox(child).enabled)
+						{
+							CheckBox(child).enabled = false;
+							CheckBox(child).alpha = 0.1;
+						}
+						else
+						{
+							CheckBox(child).enabled = true;
+							CheckBox(child).alpha = 1;
+						}
+					}
+				}
+			}
+			
+			private function ChangeSlotWindow_Ok(event:MouseEvent):void
+			{
+				var window:ChangeSlotsWindow = ChangeSlotsWindow(Button(event.target).parent);
+				
+				var needUpdate:Boolean = false;
+				for each(var child:UIComponent in window.panel.getChildren())
+				{
+					if (child.className == "CheckBox" && CheckBox(child).selected) needUpdate = true;
+				}
+				if (!needUpdate)
+				{
+					// Close.
+					window.closeWindow();
+					return;
+				}
+				
+				// Add slots.
+				if (editSlotMode == EditSlotMode.ADD_SLOT)
+				{
+					for each(child in window.panel.getChildren())
+					{
+						if (child.className == "CheckBox" && CheckBox(child).selected)
+						{ 
+							AddNewTextureSlot(textureSlots.length, CheckBox(child).id);
+							// Recreate.
+							TextureSlots.removeAllChildren();
+							UpdateTextureSlots();
+						}
+					}
+				}
+				// Delete slots.
+				if (editSlotMode == EditSlotMode.DEL_SLOT)
+				{
+					for each(child in window.panel.getChildren())
+					{
+						if (child.className == "CheckBox" && CheckBox(child).selected)
+						{
+							DeleteTextureSlot(CheckBox(child).id);
+							// Recreate.
+							TextureSlots.removeAllChildren();
+							UpdateTextureSlots();
+						}
+					}
+				}
+								
+				DownScale.removeAllChildren();
+				// Update downscales.
+				UpdateDownscaleSlots();
+				// Update alphas.
+				UpdateAlphaSlots();
+				
+				// Close.
+				window.closeWindow();
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Texture slots.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function AddNewTextureSlot(indexVPos:int, slotName:String, selected:Boolean=false):void
+			{
+				var vPos:int = indexVPos * 25 + 10;
+				
+				var hBox:HBox = new HBox();
+				hBox.id = slotName;
+				hBox.x = 10;
+				hBox.y = vPos;
+				hBox.height = 30;
+				TextureSlots.addChild(hBox);
+				
+				var cb:CheckBox = new CheckBox();
+				cb.id = "SelectSlot";
+				cb.selected = selected;
+				hBox.addChild(cb);
+				
+				var lb:Label = new Label();
+				lb.text = " " + slotName;
+				lb.width = 100;
+				hBox.addChild(lb);
+				
+				var isMultichanel:Boolean = false;
+				var im:Image = new Image();
+				im.source = SlotPix.source;	// TODO: fake.
+				im.id = "SlotExport";
+				im.scaleContent = false;
+				for each(st in slotTemplates)
+				{
+					if (st.slot != slotName) continue;
+					
+					// Detect multichanel export template.
+					if (st.fill_r != null || st.fill_g != null || st.fill_b != null || st.fill_a != null)
+					{
+						im.source = RgbPix.source;	// TODO: fake.
+						im.id = "ChannelExport";
+						//im = new Image();
+						//im.source = RgbPix.source;	// TODO: fake.
+						//Alert.show(im.source.toString(), "", mx.controls.Alert.OK);
+						
+						//im.source = "@Embed('assets/pics/Rgb_10_20.png')";
+						//im.source = "@Embed('../assets/pics/Rgb_10_20.png')";
+						//im.source = 'assets/pics/Rgb_10_20.png';
+						//im.source = '../assets/pics/Rgb_10_20.png';
+					}
+				}
+				hBox.addChild(im);
+				
+				var sp:Spacer = new Spacer();
+				sp.width = 5;
+				hBox.addChild(sp);
+				
+				var ti:Label = new Label();
+				ti.id = "Suffix";
+				ti.width = 50;
+				for each(var st:Object in slotTemplates)
+				{
+					if (st.slot == slotName)
+					{
+						ti.text = st.suffix;
+					}
+				}
+				hBox.addChild(ti);
+				
+				textureSlots.addItem(hBox);
+			}
+			
+			private function DeleteTextureSlot(slotName:String):void
+			{
+				// Delete from array.
+				var index:int = -1;
+				for(var i:int = 0; i < textureSlots.length; i++)
+				{
+					if (textureSlots[i].id == slotName) index = i;
+				}
+				if (index == -1) return;
+				
+				textureSlots.removeItemAt(index);
+			}
+			
+			private function UpdateTextureSlots():void
+			{
+				var oldTextureSlots:ArrayCollection = new ArrayCollection(textureSlots.toArray());
+				textureSlots.removeAll();
+				for each(var st:Object in slotTemplates)
+				{
+					for (var i:int = 0; i < oldTextureSlots.length; i++)
+					{
+						var isSelected:Boolean = false;
+						for each(var child:UIComponent in oldTextureSlots[i].getChildren())
+						{
+							if (child.id == "SelectSlot") isSelected = CheckBox(child).selected;
+						}
+						if (oldTextureSlots[i].id == st.slot) AddNewTextureSlot(textureSlots.length, st.slot, isSelected);
+					}
+				}
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Downscale and alpha.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function AddNewDownscaleSlot(indexVPos:int, slotName:String, coeff:int=1):void
+			{
+				var yPos:int = indexVPos * 25 + 10;;
+				
+				var hBox:HBox = new HBox();
+				hBox.id = slotName;
+				hBox.x = 10;
+				hBox.y = yPos;
+				DownScale.addChild(hBox);
+				
+				var lb:Label = new Label();
+				lb.text = slotName;
+				lb.width = 60;
+				hBox.addChild(lb);
+				
+				var cb:ComboBox = new ComboBox();
+				cb.id = "Coeff";
+				cb.width = 50;
+				cb.dataProvider = ["1", "2", "4"];
+				cb.selectedIndex = 0;
+				if (coeff == 2) cb.selectedIndex = 1;
+				if (coeff == 4) cb.selectedIndex = 2;
+				hBox.addChild(cb);
+				
+				downscaleSlots.addItem(hBox);
+			}
+			
+			private function AddNewAlphaSlot(indexVPos:int, slotName:String, source:String=""):void
+			{
+				var yPos:int = indexVPos * 25 + 10;;
+				
+				var hBox:HBox = new HBox();
+				hBox.id = slotName;
+				hBox.x = 140;
+				hBox.y = yPos;
+				DownScale.addChild(hBox);
+				
+				var cb:ComboBox = new ComboBox();
+				cb.id = "Alpha";
+				cb.width = 90;
+				cb.y = yPos;
+				var alphaSources:ArrayCollection = new ArrayCollection();
+				alphaSources.addItem(new String(""));
+				for each (var ts:HBox in textureSlots)
+				{
+					// Detect channel export slot and dont add one to alpha sources. 
+					var isChannelExport:Boolean = false;
+					for each(var child:UIComponent in ts.getChildren())
+					{
+						if (child.id == "ChannelExport") isChannelExport = true;
+					}
+					if (!isChannelExport) alphaSources.addItem(new String(ts.id));
+				}
+				cb.dataProvider = alphaSources;
+				cb.selectedIndex = 0;
+				for (var i:int = 0; i < alphaSources.length; i++)
+				{
+					if (alphaSources[i] == source) cb.selectedIndex = i;
+				}
+				hBox.addChild(cb);
+				
+				alphaSlots.addItem(hBox);
+			}
+			
+			private function UpdateDownscaleSlots():void
+			{
+				var oldDownscaleSlots:ArrayCollection = new ArrayCollection(downscaleSlots.toArray());
+				
+				downscaleSlots.removeAll();
+				// Recreate.
+				for (var i:int = 0; i < textureSlots.length; i++)
+				{
+					var oldDownscale:int = 1;
+					for (var s:int = 0; s < oldDownscaleSlots.length; s++)
+					{
+						if (oldDownscaleSlots[s].id == textureSlots[i].id)
+						{
+							for each(var child:UIComponent in oldDownscaleSlots[s].getChildren())
+							{
+								if (child.id == "Coeff") oldDownscale = int(ComboBox(child).selectedLabel);
+							}
+						}
+					}
+					AddNewDownscaleSlot(i, textureSlots[i].id, oldDownscale);	
+				}
+			}
+			
+			private function UpdateAlphaSlots():void
+			{
+				var oldAlphaSlots:ArrayCollection = new ArrayCollection(alphaSlots.toArray());
+				
+				alphaSlots.removeAll();
+				// Recreate.
+				for (var i:int = 0; i < textureSlots.length; i++)
+				{
+					var oldAlpha:String = "";
+					for (var s:int = 0; s < oldAlphaSlots.length; s++)
+					{
+						if (oldAlphaSlots[s].id == textureSlots[i].id)
+						{
+							for each(var child:UIComponent in oldAlphaSlots[s].getChildren())
+							{
+								if (child.id == "Alpha") oldAlpha = ComboBox(child).selectedLabel;
+							}
+						}
+					}
+					AddNewAlphaSlot(i, textureSlots[i].id, oldAlpha);	
+				}
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Create layers template structute.
+			// ---------------------------------------------------------------------------------------------------------------------
+			protected function CreateLayersTemplate_clickHandler(event:MouseEvent):void
+			{
+				var data:Object = GetExportDataFromGUI();
+				ExternalInterface.call("CreateLayersTemplate", data, slotTemplates);
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Save settings.
+			// ---------------------------------------------------------------------------------------------------------------------
+			protected function SaveSettings_clickHandler(event:MouseEvent):void
+			{
+				SaveConfig();
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Keys.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function keyDown(event:KeyboardEvent):void
+			{
+				if (event.keyCode == Keyboard.CONTROL)
+				{
+					//Alert.show("Ctrl.", 'Photoshop Scripting',mx.controls.Alert.OK);
+					ctrlKeyDown = true;
+				}
+				if (ctrlKeyDown && event.keyCode == Keyboard.ENTER)
+				{
+					Alert.show("Export.", 'Photoshop Scripting',mx.controls.Alert.OK);
+				}
+			}
+			
+			private function keyUp(event:KeyboardEvent):void
+			{
+				if (event.keyCode == Keyboard.CONTROL)
+				{
+					ctrlKeyDown = false;
+				}
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Help window.
+			// ---------------------------------------------------------------------------------------------------------------------
+			protected function HelpBtn_clickHandler(event:MouseEvent):void
+			{
+				ExternalInterface.call("CreateHelpWindow");
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Update progress bar.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function UpdateProgressBar(exportedSlot:String, exportProgress:int):void
+			{
+				//Alert.show(exportedSlot, '',mx.controls.Alert.OK);
+				progressBar.label = "Export: " + exportedSlot + " (" + exportProgress + " of " + slotsForExport + ")";
+				progressBar.setProgress(exportProgress, slotsForExport);
+				// Repaint ?
+				ExternalInterface.call("Refresh"); // Not work.
+				//progressBar.dispatchEvent(new ResizeEvent(ResizeEvent.RESIZE)); // Not work.
+				//this.dispatchEvent(new MouseEvent(MouseEvent.MOUSE_OVER, true, false, 0, 0, progressBar)); // Not work.
+				//progressBar.dispatchEvent(new MouseEvent(MouseEvent.MOUSE_OVER));	// Not work.
+				//progressBar.drawRoundRect(0, 0, 100, 20);	// Not work.
+				//progressBar.validateNow(); // Not work.
+				//invalidateDisplayList();	// Not work.
+				//this.validateNow();	// Not work.
+				//progressBar.stage.invalidate();
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Get data from gui.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function GetExportDataFromGUI():Object
+			{
+				var xml:XML = GuiToXML();
+				var data:Object = XmlHelper.GetExportData(xml);
+				
+				return data;
+			}
+			
+			protected function OpenTemplates_clickHandler(event:MouseEvent):void
+			{
+				// 
+				ExternalInterface.call("OpenTemplatesFile", XmlHelper.slotsFile);
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// Config.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function LoadConfig():void
+			{	
+				// Load config xml.
+				var str:String = ExternalInterface.call("LoadXML", XmlHelper.configFile);
+				var configXML:XML = new XML(str);
+				//Alert.show(configXML.toString(), "", mx.controls.Alert.OK);
+				
+				// Export types.
+				var types:XMLList = configXML.types.*;
+				for(var i:int = 0; i < types.length(); i++)
+				{
+					AddNewTextureSlot(i, types[i].@slot, (types[i].@selected == "true")?true:false);
+				}
+				
+				// Downscale.
+				var downscales:XMLList = configXML.downscale.*;
+				for(i = 0; i < downscales.length(); i++)
+				{
+					AddNewDownscaleSlot(i, downscales[i].@slot, downscales[i].@coeff);
+				}
+				
+				// Alpha.
+				var alphas:XMLList = configXML.alpha.*;
+				for(i = 0; i < alphas.length(); i++)
+				{
+					AddNewAlphaSlot(i, alphas[i].@slot, alphas[i].@source);
+				}
+				
+				// Options.
+				var outputType:String = configXML.options.outputtype.@value;
+				for(i = 0; i < OutputType.dataProvider.length; i++)
+				{
+					if (OutputType.dataProvider[i].toString() == outputType) OutputType.selectedIndex = i;
+				}
+				NonPow2.selected = (configXML.options.nonpow2.@selected == "true")?true:false;
+				SharpenContrast.selected = (configXML.options.sharpencontrast.@selected == "true")?true:false;
+				OnlyExport.selected = (configXML.options.onlyexport.@selected == "true")?true:false;
+				CopyToSymmetryPath.selected = (configXML.options.copytosymmetrypath.@selected == "true")?true:false;
+				var lastProjectPath:String = configXML.lastprojectpath.@path;
+				//lastProjectPath = lastProjectPath.replace("/", "\\");
+				//projectsPath = new ArrayCollection(["D:\\Project1\\Assets\\", "D:\\Project2\\Assets\\"]);
+				for (i = 0; i < projectsPath.length; i ++)
+				{
+					var currPath:String = projectsPath[i].label;
+					currPath = string_rstrip(currPath);
+					currPath = string_lstrip(currPath);
+					if (lastProjectPath == currPath)
+					{
+						SymmetryPath.selectedIndex = i;
+					}
+				}
+				
+				(configXML.downscalehidden.@value == "true")?ShowDownScalePanel(true):ShowDownScalePanel(false);
+				(configXML.optionshidden.@value == "true")?ShowOptionsPanel(true):ShowOptionsPanel(false);
+			}
+			
+			private function GuiToXML():XML
+			{
+				var newXML:XML = <data/>;
+				
+				// Texture types.
+				newXML.appendChild(<types></types>);
+				for each (var slot:HBox in textureSlots)
+				{
+					var select:String;
+					for each (var child:UIComponent in slot.getChildren())
+					{
+						if (child.id == "SelectSlot") select = CheckBox(child).selected.toString();
+					}
+					
+					newXML.types.appendChild(<type slot={slot.id} selected={select}></type>);
+				}
+				
+				// Downscale.
+				newXML.appendChild(<downscale></downscale>);
+				for each (slot in downscaleSlots)
+				{
+					var coeff:String;
+					for each (child in slot.getChildren())
+					{
+						if (child.id == "Coeff") coeff = ComboBox(child).selectedLabel;
+					}
+					
+					newXML.downscale.appendChild(<ds slot={slot.id} coeff={coeff}></ds>);
+				}
+				
+				// Alpha.
+				newXML.appendChild(<alpha></alpha>);
+				for each (slot in alphaSlots)
+				{
+					var source:String;
+					for each (child in slot.getChildren())
+					{
+						if (child.id == "Alpha") source = ComboBox(child).selectedLabel;
+					}
+					newXML.alpha.appendChild(<a slot={slot.id} source={source}></a>);
+				}
+				
+				// Options.
+				newXML.appendChild(<options></options>);
+				newXML.options.appendChild(<outputtype value={OutputType.selectedLabel}></outputtype>);
+				newXML.options.appendChild(<nonpow2 selected={NonPow2.selected.toString()}></nonpow2>);
+				newXML.options.appendChild(<sharpencontrast selected={SharpenContrast.selected.toString()}></sharpencontrast>);
+				newXML.options.appendChild(<onlyexport selected={OnlyExport.selected.toString()}></onlyexport>);
+				newXML.options.appendChild(<copytosymmetrypath selected={CopyToSymmetryPath.selected.toString()}></copytosymmetrypath>);
+				
+				//
+				newXML.appendChild(<downscalehidden value={downscaleHidden.toString()}></downscalehidden>);
+				newXML.appendChild(<optionshidden value={optionsHidden.toString()}></optionshidden>);
+				newXML.appendChild(<lastprojectpath path={SymmetryPath.selectedLabel}></lastprojectpath>);
+				
+				//Alert.show(newXML.toString(), "", mx.controls.Alert.OK);
+				return newXML;
+			}
+			
+			private function SaveConfig():void
+			{
+				//
+				var newXML:XML = GuiToXML();
+				
+				ExternalInterface.call("SaveXML", XmlHelper.configFile, newXML.toString());
+			}
+			
+			private function SavePanelStatus():void
+			{
+				// Save only <downscaleHidden> and <optionsHidden> parameters.
+				var str:String = ExternalInterface.call("LoadXML", XmlHelper.configFile);
+				var configXML:XML = new XML(str);
+				
+				configXML.downscalehidden.@value = downscaleHidden;
+				configXML.optionshidden.@value = optionsHidden;
+				
+				ExternalInterface.call("SaveXML", XmlHelper.configFile, configXML.toString());
+			}
+			
+			// ---------------------------------------------------------------------------------------------------------------------
+			// String functions.
+			// ---------------------------------------------------------------------------------------------------------------------
+			private function string_rstrip(str:String):String
+			{
+				var new_str:String = ""
+				for (var i:int = str.length - 1; i >= 0; i--)
+				{
+					if (str.charAt(i) != ' ')
+					{
+						new_str = str.substr(0, i + 1);
+						break;
+					}
+				}
+				return (new_str);
+			}
+			
+			private function string_lstrip(str:String):String
+			{
+				var new_str:String = ""
+				for (var i:int = 0; i < str.length; i++)
+				{
+					if (str.charAt(i) != ' ')
+					{
+						new_str = str.substr(i);
+						break;
+					}
+				}
+				return (new_str);
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:VBox y="229" width="250" height="470" horizontalCenter="0" verticalGap="0">
+		<mx:Button id="DownScaleRoll" x="0" y="-37" width="100%" height="20" label="Downscale and alpha channel"
+				   alpha="0.5" click="DownScaleRoll_clickHandler(event)" cornerRadius="0"
+				   labelPlacement="left" textAlign="left"/>
+		<mx:Canvas id="DownScale" width="100%" height="150" borderColor="#1E1E1E" borderStyle="none"
+				   textAlign="left">
+		</mx:Canvas>
+		<mx:Button id="OptionsRoll" width="100%" height="20" label="Options" alpha="0.5"
+				   click="OptionsRoll_clickHandler(event)" cornerRadius="0" labelPlacement="left"
+				   textAlign="left"/>
+		<mx:Canvas id="Options" width="100%" height="280">
+			<mx:Button id="SaveSettings" x="17" y="218" width="109" label="Save settings"
+					   click="SaveSettings_clickHandler(event)"/>
+			<mx:Button id="OpenTemplates" x="127" y="218" width="109" label="Open templates file"
+					   click="OpenTemplates_clickHandler(event)"/>
+			<mx:Button id="CreateLayersTemplate" x="17" y="189" width="219"
+					   label="Create layers template"
+					   click="CreateLayersTemplate_clickHandler(event)"/>
+			<mx:CheckBox id="NonPow2" x="17" y="71" label="Non ^2"/>
+			<mx:CheckBox id="SharpenContrast" x="117" y="71" label="Sharpen\contrast"/>
+			<mx:CheckBox id="CopyToSymmetryPath" x="17" y="126" label="Copy to symmetry path"/>
+			<mx:ComboBox id="SymmetryPath" x="17" y="149" width="219" dataProvider="{projectsPath}"></mx:ComboBox>
+			<mx:Button id="AddTextureSlot" x="117" y="9" width="16" height="16" alpha="0.7"
+					   click="AddTextureSlot_clickHandler(event)" icon="@Embed('../assets/pics/Add.png')"
+					   labelPlacement="left" textAlign="center"/>
+			<mx:Button id="DelTextureSlot" x="139" y="9" width="16" height="16" alpha="0.7"
+					   click="DelTextureSlot_clickHandler(event)" icon="@Embed('../assets/pics/Del.png')"
+					   labelPlacement="left" textAlign="center"/>
+			<mx:Label id="Label_1" x="16" y="8" alpha="1.0" text="Texture slot"/>
+			<mx:Label id="Label_0" x="17" y="41" alpha="1.0" text="Output type"/>
+			<mx:Button id="HelpBtn" x="17" y="247" width="109" label="Help"
+					   click="HelpBtn_clickHandler(event)"/>
+			<mx:Button id="AboutBtn" x="127" y="247" width="109" label="About"/>
+			<mx:CheckBox id="OnlyExport" x="17" y="95" label="Only export"/>
+			<mx:CheckBox x="117" y="98" enabled="false"/>
+			<mx:HRule y="32" width="96%" alpha="0.5" horizontalCenter="0" strokeWidth="1"/>
+			<mx:HRule y="67" width="96%" alpha="0.5" horizontalCenter="0" strokeWidth="1"/>
+			<mx:HRule y="122" width="96%" alpha="0.5" horizontalCenter="0" strokeWidth="1"/>
+			<mx:HRule y="180" width="96%" alpha="0.5" horizontalCenter="0" strokeWidth="1"/>
+			<mx:ComboBox id="OutputType" x="117" y="39" width="64"
+						 dataProvider="[tga, png, tiff, bmp]" editable="false"></mx:ComboBox>
+		</mx:Canvas>
+	</mx:VBox>
+	<mx:Button id="Export" y="10" width="96%" height="27" label="Export"
+			   click="Export_clickHandler(event)" horizontalCenter="0" labelPlacement="left"/>
+	<mx:Canvas id="TextureSlots" y="45" width="96%" height="180" backgroundAlpha="0.0"
+			   borderColor="#1E1E1E" borderStyle="solid" horizontalCenter="0">
+	</mx:Canvas>
+	<mx:ProgressBar id="progressBar" y="56" width="96%" horizontalCenter="0"/>
+</mx:Application>

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml"
+				width="380" height="50" minWidth="955" minHeight="600" layout="absolute" initialize="Init()" verticalScrollPolicy="off" horizontalScrollPolicy="off">
+	
+	<mx:Script>
+		<![CDATA[
+			
+			import mx.controls.Alert;
+			import tgasaver.XmlHelper;
+			
+			private var slotTemplates:Array = new Array();
+			
+			// Number of textures for export.
+			private var slotsForExport:int = 0;
+			
+			protected function Init():void
+			{	
+				// Init.
+				ExternalInterface.addCallback("UpdateProgressBar", function(exportedSlot:String, exportProgress:int):void{UpdateProgressBar(exportedSlot, exportProgress)});
+				
+				//
+				application.addEventListener(KeyboardEvent.KEY_DOWN, keyDown);
+				
+				// 
+				var str:String = ExternalInterface.call("LoadXML", XmlHelper.configFile);
+				var configXML:XML = new XML(str);
+				//Alert.show("=> " + configXML.options.outputtype.@value, "", mx.controls.Alert.OK);
+				var data:Object = XmlHelper.GetExportData(configXML);
+				
+				for each (var s:Object in data.textureslots)
+				{
+					if (s.selected) slotsForExport++;
+				}
+				
+				progressBar.mode = "manual";
+				progressBar.minimum = 0;
+				progressBar.maximum = slotsForExport;
+				progressBar.label = "Export: (0 of " + slotsForExport + ")";
+				
+				cancelBtn.setFocus();
+				
+				// Slot templates.
+				slotTemplates = XmlHelper.GetSlotTemplates();
+				
+				// Start export.
+				ExternalInterface.call("Export", data, slotTemplates);
+				
+				// Close window after exporting.
+				ExternalInterface.call("CloseWindow");
+			}
+			
+			protected function Cancel_clickHandler(event:MouseEvent):void
+			{	
+				// Terminate export process.
+				ExternalInterface.call("CloseWindow");
+			}
+			
+			private function UpdateProgressBar(exportedSlot:String, exportProgress:int):void
+			{
+				progressBar.label = "Export: " + exportedSlot + " (" + exportProgress + " of " + slotsForExport + ")";
+				progressBar.setProgress(exportProgress, slotsForExport);
+				// Repaint ?
+				//progressBar.validateNow();
+				//invalidateDisplayList();
+				//this.validateNow();
+			}
+			
+			private function keyDown(event:KeyboardEvent):void
+			{
+				if (event.keyCode == Keyboard.ESCAPE)
+				{
+					// Close window.
+					Alert.show("Close window.", '',mx.controls.Alert.OK);
+					//ExternalInterface.call("CloseWindow");
+				}
+			}
+			
+		]]>
+	</mx:Script>
+	
+	<mx:Button id="cancelBtn" x="306" label="Cancel" click="Cancel_clickHandler(event)"
+			   verticalCenter="0"/>
+	<mx:ProgressBar id="progressBar" x="11" y="16" width="283"/>
+	
+</mx:Application>

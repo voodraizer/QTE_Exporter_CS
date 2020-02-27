@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<data>
+	<types>
+		<type slot="diffuse" selected="true" suffix="_df"></type>
+		<type slot="normal" selected="false" suffix="_nm"></type>
+	</types>
+	<downscale>
+		<ds slot="diffuse" coeff="1"></ds>
+		<ds slot="normal" coeff="2"></ds>
+	</downscale>
+	<options>
+		<nonpow2 selected="false"></nonpow2>
+		<sharpencontrast selected="false"></sharpencontrast>
+		<copytosymmetrypath selected="false"></copytosymmetrypath>
+	</options>
+	<downscalehidden value="true"></downscalehidden>
+	<optionshidden value="false"></optionshidden>
+	<lastprojectpath path="e:\\Unity\\Unity Projects\\IronSky\\Assets\\"></lastprojectpath>
+</data>
